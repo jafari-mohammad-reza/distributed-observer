@@ -1,6 +1,14 @@
 version: "3.8"
 
 services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: server
+    hostname: server
+    
   zookeeper:
     image: docker.arvancloud.ir/confluentinc/cp-zookeeper:7.8.0
     container_name: zookeeper
