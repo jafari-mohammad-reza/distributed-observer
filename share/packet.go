@@ -56,5 +56,6 @@ type MutatePayload struct {
 	Op        MutateOp        `json:"op"`    // "set" , "delete" , "update"
 	Index     string          `json:"index"` // "logs-2025-07"
 	Value     json.RawMessage `json:"value,omitempty"`
-	Timestamp string          `json:"time_stamp"`
+	DocId     string
+	Timestamp string `json:"time_stamp"`
 }

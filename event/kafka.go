@@ -1,6 +1,7 @@
 package event
 
 import (
+	"context"
 	"distributed-observer/conf"
 	"distributed-observer/share"
 	"encoding/json"
@@ -22,6 +23,7 @@ type EventHandler interface {
 	Disconnect() error
 	Log(level LogType, log string) error
 	Mutate(payload share.MutatePayload)
+	ConsumeTopic(topic, groupId string) (chan *kafka.Message, error)
 }
 
 func NewEventHandler(conf *conf.Config) EventHandler {
@@ -44,17 +46,58 @@ func NewKafkaEventHandler(conf *conf.Config) *KafkaEventHandler {
 }
 
 func (k *KafkaEventHandler) Connect() error {
+	if len(k.conf.Kafka.BootstrapTopics) > 0 {
+		k.bootStrapTopics()
+	}
 	producer, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers":   k.conf.Kafka.Brokers,
 		"client.id":           k.conf.Kafka.ClientId,
 		"acks":                "all",
 		"delivery.timeout.ms": 5000})
-
 	if err != nil {
 		return fmt.Errorf("failed to create producer: %s", err)
 	}
+
 	k.producer = producer
 	go k.observer()
+	return nil
+}
+func (k *KafkaEventHandler) bootStrapTopics() error {
+	admin, err := kafka.NewAdminClient(&kafka.ConfigMap{
+		"bootstrap.servers": k.conf.Kafka.Brokers,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create Kafka admin client: %w", err)
+	}
+	defer admin.Close()
+
+	topics := make([]kafka.TopicSpecification, 0, len(k.conf.Kafka.BootstrapTopics))
+	for _, topic := range k.conf.Kafka.BootstrapTopics {
+		topics = append(topics, kafka.TopicSpecification{
+			Topic:             topic,
+			NumPartitions:     1,
+			ReplicationFactor: 1,
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	results, err := admin.CreateTopics(ctx, topics, kafka.SetAdminOperationTimeout(5*time.Second))
+	if err != nil {
+		return fmt.Errorf("failed to create topics: %w", err)
+	}
+
+	for _, res := range results {
+		switch res.Error.Code() {
+		case kafka.ErrNoError:
+			fmt.Printf("Topic '%s' created successfully\n", res.Topic)
+		case kafka.ErrTopicAlreadyExists:
+			fmt.Printf("Topic '%s' already exists\n", res.Topic)
+		default:
+			fmt.Printf("Failed to create topic '%s': %s\n", res.Topic, res.Error.String())
+		}
+	}
 	return nil
 }
 func (k *KafkaEventHandler) Disconnect() error {
@@ -111,7 +154,7 @@ func (k *KafkaEventHandler) Log(level LogType, log string) error {
 		},
 		Timestamp: time.Now(),
 	}, k.logChan)
-	k.producer.Flush(5000)
+	// k.producer.Flush(100)
 	if err != nil {
 		return fmt.Errorf("failed to produce message: %s", err)
 	}
@@ -119,13 +162,11 @@ func (k *KafkaEventHandler) Log(level LogType, log string) error {
 }
 
 func (k *KafkaEventHandler) Mutate(payload share.MutatePayload) {
-
 	payload.Timestamp = time.Now().Format(time.RFC3339Nano)
-	topic := fmt.Sprintf("%s_%s", payload.Index, payload.Op) //TODO: when closing an index later in storage we must make sure we delete its topics as well
 
 	err := k.producer.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{
-			Topic:     &topic,
+			Topic:     &k.conf.Kafka.MutateTopic,
 			Partition: kafka.PartitionAny,
 		},
 		Value: payload.Value,
@@ -136,8 +177,41 @@ func (k *KafkaEventHandler) Mutate(payload share.MutatePayload) {
 		},
 		Timestamp: time.Now(),
 	}, k.mutateChan)
-	k.producer.Flush(5000)
+	// k.producer.Flush(100)
 	if err != nil {
 		k.Log(ErrorLog, fmt.Sprintf("[%s] failed to produce %s - %s command", payload.Timestamp, payload.Index, payload.Op))
 	}
+}
+
+func (k *KafkaEventHandler) ConsumeTopic(topic, groupId string) (chan *kafka.Message, error) {
+	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers": k.conf.Kafka.Brokers,
+		"group.id":          groupId,
+		"auto.offset.reset": "earliest",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create consumer %s", err)
+	}
+	consumer.SubscribeTopics([]string{topic}, nil)
+	messages := make(chan *kafka.Message, k.conf.Kafka.MutateChanSize)
+	go func() {
+		defer close(messages)
+		defer consumer.Close()
+
+		for {
+			ev := consumer.Poll(50)
+			switch e := ev.(type) {
+			case *kafka.Message:
+				messages <- e
+			case kafka.Error:
+				k.Log(ErrorLog, fmt.Sprintf(
+					"failed to consume topic:%s , error:%s", topic, e.Error()))
+				return
+			default:
+				continue
+			}
+		}
+	}()
+
+	return messages, nil
 }

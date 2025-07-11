@@ -1,8 +1,8 @@
 build:
-	@go build -o ./bin/server ./cmd/server.go
+	@go build -o ./bin/observer ./cmd/observer.go
 run: build
-	@./bin/server
+	@./bin/observer
 dev:
-	@air -c .server.toml
+	@air -c .observer.toml
 test:
 	@go test ./... -v

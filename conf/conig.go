@@ -18,11 +18,13 @@ type Config struct {
 	Kafka KafkaConf `mapstructure:"kafka"`
 }
 type KafkaConf struct {
-	Brokers        string `mapstructure:"brokers" validate:"required"`
-	ClientId       string `mapstructure:"client_id" validate:"required"`
-	LogTopic       string `mapstructure:"log_topic" `
-	LogChanSize    int    `mapstructure:"log_chan_size"`
-	MutateChanSize int    `mapstructure:"mutate_chan_size"`
+	Brokers         string   `mapstructure:"brokers" validate:"required"`
+	ClientId        string   `mapstructure:"client_id" validate:"required"`
+	LogChanSize     int      `mapstructure:"log_chan_size"`
+	MutateChanSize  int      `mapstructure:"mutate_chan_size"`
+	BootstrapTopics []string `mapstructure:"bootstrap_topics" `
+	LogTopic        string   `mapstructure:"log_topic" `
+	MutateTopic     string   `mapstructure:"mutate_topic" `
 }
 
 func NewConfig() (*Config, error) {
