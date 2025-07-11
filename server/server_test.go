@@ -5,6 +5,7 @@ import (
 	"distributed-observer/event"
 	"distributed-observer/share"
 	"encoding/binary"
+	"encoding/json"
 	"io"
 	"net"
 	"testing"
@@ -17,10 +18,11 @@ func TestServer(t *testing.T) {
 	config := &conf.Config{
 		Port: 8080,
 		Kafka: conf.KafkaConf{
-			Brokers:     "localhost:9092",
-			ClientId:    "test-client",
-			LogTopic:    "test-logs",
-			LogChanSize: 100,
+			Brokers:        "localhost:9092",
+			ClientId:       "test-client",
+			LogTopic:       "test-logs",
+			LogChanSize:    100,
+			MutateChanSize: 100,
 		},
 	}
 	handler := event.NewEventHandler(config)
@@ -34,14 +36,28 @@ func TestServer(t *testing.T) {
 	time.Sleep(time.Second)
 	conn, err := net.Dial("tcp", "localhost:8080")
 	assert.Nil(t, err, "Should connect to server without error")
-
+	message, err := json.Marshal(struct {
+		Name   string `json:"name"`
+		Family string `json:"family"`
+	}{
+		Name:   "test",
+		Family: "test-family",
+	})
+	assert.Nil(t, err, "the message should be marshalled without error")
+	setPayload := share.MutatePayload{
+		Op:    share.SetOp,
+		Index: "logs-2025-12",
+		Value: message,
+	}
+	payload, err := json.Marshal(setPayload)
+	assert.Nil(t, err, "the payload should be marshalled without error")
 	setPacket := share.TransferPacket{
+		Command:  share.SetCommand,
 		Sender:   "test-sender",
 		Receiver: "test-receiver",
 		Time:     time.Now(),
 		Headers:  map[string]string{"test-header": "test-value"},
-		Payload:  []byte("test data"),
-		Command:  share.CommandSet,
+		Payload:  payload,
 	}
 	serializedPacket, err := share.SerializeTransferPacket(&setPacket)
 	assert.Nil(t, err, "Should serialize packet without error")

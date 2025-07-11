@@ -113,3 +113,8 @@ This format provides:
 • Raft-style metadata leadership and replication
 • Smart index allocator for memory balancing
 • Log-based failover and recovery system
+
+
+## TODOS:
+- [ ] Consume observer-logs and store in .log format
+- [ ] implement SET command and index sharding

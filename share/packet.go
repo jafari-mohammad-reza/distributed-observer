@@ -3,6 +3,7 @@ package share
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"net"
 	"time"
 )
@@ -10,9 +11,9 @@ import (
 type Command string
 
 const (
-	CommandSet    Command = "SET"
-	CommandSearch Command = "SEARCH"
-	CommandDelete Command = "DELETE"
+	SetCommand    Command = "SET"
+	SearchCommand Command = "SEARCH"
+	DeleteCommand Command = "DELETE"
 )
 
 type TransferPacket struct {
@@ -22,7 +23,7 @@ type TransferPacket struct {
 	Time     time.Time
 	Sender   string
 	Receiver string
-	Conn *net.Conn
+	Conn     *net.Conn
 }
 
 func DeserializeTransferPacket(data []byte) (*TransferPacket, error) {
@@ -41,4 +42,19 @@ func SerializeTransferPacket(packet *TransferPacket) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+type MutateOp string
+
+const (
+	SetOp    MutateOp = "SET"
+	DelOp    MutateOp = "DEL"
+	UpdateOp MutateOp = "UPDATE"
+)
+
+type MutatePayload struct {
+	Op        MutateOp        `json:"op"`    // "set" , "delete" , "update"
+	Index     string          `json:"index"` // "logs-2025-07"
+	Value     json.RawMessage `json:"value,omitempty"`
+	Timestamp string          `json:"time_stamp"`
 }

@@ -4,3 +4,4 @@ kafka:
   client_id: observer-producer
   log_topic: observer-logs
   log_chan_size: 1000
+  mutate_chan_size: 1000

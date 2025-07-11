@@ -6,6 +6,7 @@ import (
 	"distributed-observer/event"
 	"distributed-observer/share"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -70,8 +71,13 @@ func (s *TCPServer) handleCommand(packet *share.TransferPacket) {
 	conn := *packet.Conn
 	defer conn.Close()
 	switch packet.Command {
-	case share.CommandSet:
-		s.eventHandler.Log(event.InfoLog, "Handling SET command for packet")
+	case share.SetCommand:
+		var payload share.MutatePayload
+		err := json.Unmarshal(packet.Payload, &payload)
+		if err != nil {
+			s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("failed to unmarshal SET command payload: %s", err.Error()))
+		}
+		s.eventHandler.Mutate(payload)
 		s.respondConn(conn, []byte("set command applied"))
 	default:
 		s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("Unknown command: %s", packet.Command))
