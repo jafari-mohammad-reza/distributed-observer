@@ -1,0 +1,6 @@
+port: 8080
+kafka:
+  brokers: localhost:9092
+  client_id: observer-producer
+  log_topic: observer-logs
+  log_chan_size: 1000
