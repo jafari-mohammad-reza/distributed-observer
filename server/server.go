@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"distributed-observer/conf"
 	"distributed-observer/event"
+	"distributed-observer/share"
 	"encoding/binary"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"net"
@@ -24,13 +24,6 @@ type TCPServer struct {
 	config       *conf.Config
 	eventHandler event.EventHandler
 }
-type TransferPacket struct {
-	Payload  []byte
-	Headers  map[string]string
-	Time     time.Time
-	Sender   string
-	Receiver string
-}
 
 func (s *TCPServer) Start() error {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.Port))
@@ -48,7 +41,6 @@ func (s *TCPServer) Start() error {
 	}
 }
 func (s *TCPServer) handleConn(conn net.Conn) error {
-	defer conn.Close()
 	s.eventHandler.Log(event.InfoLog, "New connection established")
 	buf := new(bytes.Buffer)
 	var size int64
@@ -60,27 +52,41 @@ func (s *TCPServer) handleConn(conn net.Conn) error {
 	err = binary.Read(conn, binary.BigEndian, &size)
 	if err != nil {
 		return s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("failed to read size: %s", err.Error()))
-
 	}
 	_, err = io.CopyN(buf, conn, size)
 	if err != nil {
 		return s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("failed to read data: %s", err.Error()))
-
 	}
-	des, err := s.deserializePacket(buf.Bytes())
+	des, err := share.DeserializeTransferPacket(buf.Bytes())
 	if err != nil {
 		return s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("failed to deserialize packet: %s", err.Error()))
-
 	}
 	s.eventHandler.Log(event.InfoLog, fmt.Sprintf("Received packet from %s to %s at %s with headers: %v", des.Sender, des.Receiver, des.Time, des.Headers))
+	des.Conn = &conn
+	go s.handleCommand(des)
 	return nil
 }
-func (s *TCPServer) deserializePacket(data []byte) (*TransferPacket, error) {
-	var packet TransferPacket
-	buf := bytes.NewBuffer(data)
-	decoder := gob.NewDecoder(buf)
-	if err := decoder.Decode(&packet); err != nil {
-		return nil, err
+func (s *TCPServer) handleCommand(packet *share.TransferPacket) {
+	conn := *packet.Conn
+	defer conn.Close()
+	switch packet.Command {
+	case share.CommandSet:
+		s.eventHandler.Log(event.InfoLog, "Handling SET command for packet")
+		s.respondConn(conn, []byte("set command applied"))
+	default:
+		s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("Unknown command: %s", packet.Command))
+		return
 	}
-	return &packet, nil
+}
+
+func (s *TCPServer) respondConn(conn net.Conn, msg []byte) error {
+	err := binary.Write(conn, binary.BigEndian, int64(len(msg)))
+	if err != nil {
+		return err
+	}
+	_, err = conn.Write(msg)
+	if err != nil {
+		return err
+	}
+	return nil
 }
