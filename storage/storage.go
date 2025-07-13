@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ type StorageStats struct {
 }
 type Storage interface {
 	Insert(payload share.MutatePayload) error
+	Search(query share.SearchQuery) (*share.SearchResult, error) // search string that can be key : value , value or key ~: value
 	Stats() (*StorageStats, error)
 }
 
@@ -49,7 +51,6 @@ func NewStorageManager(conf *conf.Config, eventHandler event.EventHandler) Stora
 }
 
 type IndexStore struct {
-	Key     string // hash of index + timeMin + timeMax
 	TimeMin time.Time
 	TimeMax time.Time
 	Index   string
@@ -101,6 +102,62 @@ func (m *MemStorage) Stats() (*StorageStats, error) {
 	}
 
 	return stats, nil
+}
+
+func (m *MemStorage) Search(query share.SearchQuery) (*share.SearchResult, error) {
+	filters, err := share.ParseQuery(query.Query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse query: %s", err)
+	}
+	qMin, err := time.Parse(time.RFC3339Nano, query.TimeMin)
+	if err != nil {
+		return nil, fmt.Errorf("invalid TimeMin: %w", err)
+	}
+	qMax, err := time.Parse(time.RFC3339Nano, query.TimeMax)
+	if err != nil {
+		return nil, fmt.Errorf("invalid TimeMax: %w", err)
+	}
+
+	segs := m.Segments[query.Index]
+	var rel []*IndexStore
+	for _, s := range segs {
+		if !s.TimeMin.After(qMax) && !s.TimeMax.Before(qMin) {
+			rel = append(rel, s)
+		}
+	}
+	if len(rel) == 0 {
+		return &share.SearchResult{}, nil
+	}
+
+	merged := mergeSegments(rel)
+	data := merged.Data
+	docsSet := make(map[string]struct{}, len(data))
+	for _, f := range filters {
+		var list []string
+		switch f.Op {
+		case "val":
+			list = data[f.Value]
+		case "==":
+			list = data[f.Field+":"+f.Value]
+		default:
+			continue
+		}
+		if f.Exclude {
+			for _, id := range list {
+				delete(docsSet, id)
+			}
+		} else {
+			for _, id := range list {
+				docsSet[id] = struct{}{}
+			}
+		}
+	}
+
+	res := &share.SearchResult{DocumentIds: make([]string, 0, len(docsSet))}
+	for id := range docsSet {
+		res.DocumentIds = append(res.DocumentIds, id)
+	}
+	return res, nil
 }
 
 func (m *MemStorage) Insert(payload share.MutatePayload) error {
@@ -196,4 +253,38 @@ func headersMap(hdrs []kafka.Header) map[string]string {
 		m[h.Key] = string(h.Value)
 	}
 	return m
+}
+func mergeSegments(segs []*IndexStore) *IndexStore {
+	if len(segs) == 0 {
+		return nil
+	}
+	sorted := make([]*IndexStore, len(segs))
+	copy(sorted, segs)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].TimeMin.Before(sorted[j].TimeMin)
+	})
+
+	first := sorted[0]
+	merged := &IndexStore{
+		Index:   first.Index,
+		TimeMin: first.TimeMin,
+		TimeMax: first.TimeMax,
+		Data:    make(map[string][]string),
+	}
+	for k, ids := range first.Data {
+		merged.Data[k] = append([]string{}, ids...)
+	}
+
+	for _, seg := range sorted[1:] {
+		if seg.TimeMin.Before(merged.TimeMin) {
+			merged.TimeMin = seg.TimeMin
+		}
+		if seg.TimeMax.After(merged.TimeMax) {
+			merged.TimeMax = seg.TimeMax
+		}
+		for k, ids := range seg.Data {
+			merged.Data[k] = append(merged.Data[k], ids...)
+		}
+	}
+	return merged
 }

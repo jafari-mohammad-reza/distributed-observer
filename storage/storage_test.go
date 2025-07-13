@@ -80,3 +80,75 @@ func TestStorageManager(t *testing.T) {
 	assert.Greater(t, len(managerStats.StorageStat.Indexes), 0, "storage indexes length must be more than zero")
 
 }
+
+func TestStorage(t *testing.T) {
+
+	config := &conf.Config{
+		Port: 8081,
+		Kafka: conf.KafkaConf{
+			Brokers:        "localhost:9092",
+			ClientId:       "test-client",
+			LogTopic:       "test-logs",
+			LogChanSize:    100,
+			MutateChanSize: 100,
+			MutateTopic:    "test-mutates",
+		},
+	}
+	storage := NewMemStorage(config)
+
+	message, err := json.Marshal(struct {
+		Name   string `json:"name"`
+		Family string `json:"family"`
+	}{
+		Name:   "test",
+		Family: "test-family",
+	})
+	assert.Nil(t, err)
+	creationTs := time.Now().Format(time.RFC3339Nano)
+	err = storage.Insert(share.MutatePayload{
+		Op:        share.SetOp,
+		Index:     "test",
+		Timestamp: creationTs,
+		DocId:     "test-doc",
+		Value:     message,
+	})
+	assert.Nil(t, err)
+	stats, err := storage.Stats()
+
+	assert.Nil(t, err)
+	assert.Greater(t, len(stats.Indexes), 0)
+	searchQuery := share.SearchQuery{
+		Index:   "test",
+		TimeMin: creationTs,
+		TimeMax: time.Now().Add(time.Hour).Format(time.RFC3339Nano),
+		Query:   "name == test",
+	}
+	res, err := storage.Search(searchQuery)
+
+	assert.Nil(t, err)
+	fmt.Printf("res: %v\n", res)
+	assert.Greater(t, len(res.DocumentIds), 0)
+	searchQuery = share.SearchQuery{
+		Index:   "test",
+		TimeMin: creationTs,
+		TimeMax: time.Now().Add(time.Hour).Format(time.RFC3339Nano),
+		Query:   "name == test NOT family == test-family",
+	}
+	res, err = storage.Search(searchQuery)
+
+	assert.Nil(t, err)
+	fmt.Printf("res: %v\n", res)
+	assert.Equal(t, len(res.DocumentIds), 0)
+	searchQuery = share.SearchQuery{
+		Index:   "test",
+		TimeMin: creationTs,
+		TimeMax: time.Now().Add(time.Hour).Format(time.RFC3339Nano),
+		Query:   "name == test AND family == test-family",
+	}
+	res, err = storage.Search(searchQuery)
+
+	assert.Nil(t, err)
+	fmt.Printf("res: %v\n", res)
+	assert.Equal(t, len(res.DocumentIds), 1)
+	// TODO: test value search
+}

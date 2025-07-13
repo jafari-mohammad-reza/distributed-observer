@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -58,4 +60,59 @@ type MutatePayload struct {
 	Value     json.RawMessage `json:"value,omitempty"`
 	DocId     string
 	Timestamp string `json:"time_stamp"`
+}
+
+type SearchQuery struct {
+	Index   string `json:"index"`
+	Query   string `json:"query"` // ex: key == value AND value NOT key ~= value
+	TimeMin string `json:"timeMin"`
+	TimeMax string `json:"timeMax"`
+}
+
+type SearchFilter struct {
+	Field   string // e.g. "key"
+	Op      string // "==" or "~="
+	Value   string // e.g. "value"
+	Exclude bool   // true if prefixed with NOT
+}
+
+func ParseQuery(q string) ([]SearchFilter, error) {
+	parts := strings.Split(q, "AND")
+		fmt.Printf("parts: %v\n", parts)
+	var out []SearchFilter
+	for _, raw := range parts {
+		part := strings.TrimSpace(raw)
+
+		f := SearchFilter{}
+		if strings.HasPrefix(part, "NOT ") {
+			f.Exclude = true
+			part = strings.TrimSpace(strings.TrimPrefix(part, "NOT "))
+		}
+
+		var op string
+		switch {
+		case strings.Contains(part, "=="):
+			op = "=="
+		case strings.Contains(part, "~="):
+			op = "~="
+		case !strings.Contains(part, "==") && !strings.Contains(part, "~="):
+			op = "val"
+		default:
+			return nil, fmt.Errorf("unknown operator in clause %q", part)
+		}
+		f.Op = op
+
+		tokens := strings.SplitN(part, op, 2)
+		f.Field = strings.TrimSpace(tokens[0])
+		f.Value = strings.TrimSpace(tokens[1])
+
+		f.Value = strings.Trim(f.Value, `"'`)
+
+		out = append(out, f)
+	}
+	return out, nil
+}
+
+type SearchResult struct {
+	DocumentIds []string `json:"document_ids"`
 }
