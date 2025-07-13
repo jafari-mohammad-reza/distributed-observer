@@ -6,6 +6,7 @@ import (
 	"distributed-observer/server"
 	"distributed-observer/share"
 	"encoding/json"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -65,8 +66,17 @@ func TestStorageManager(t *testing.T) {
 	assert.Nil(t, err, "Should serialize packet without error")
 	err = share.SendDataOverTcp(conn, int64(len(serializedPacket)), serializedPacket)
 	assert.Nil(t, err, "Should send data over TCP without error")
+
 	storageManager := NewStorageManager(config, handler)
-	if err := storageManager.ConsumeMutations(); err != nil {
-		assert.Nil(t, err, "consumeMutations should return nil as error")
-	}
+	go func() {
+		if err := storageManager.ConsumeMutations(); err != nil {
+			assert.Nil(t, err, "consumeMutations should return nil as error")
+		}
+	}()
+	time.Sleep(time.Second * 10)
+	managerStats, err := storageManager.Stats()
+	assert.Nil(t, err, "storage manager status error should be nil")
+	fmt.Printf("managerStats.StorageStat.Indexes: %v\n", managerStats.StorageStat.Indexes)
+	assert.Greater(t, len(managerStats.StorageStat.Indexes), 0, "storage indexes length must be more than zero")
+
 }

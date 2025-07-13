@@ -173,6 +173,7 @@ func (k *KafkaEventHandler) Mutate(payload share.MutatePayload) {
 		Key:   []byte(payload.Index),
 		Headers: []kafka.Header{
 			{Key: "op", Value: []byte(payload.Op)},
+			{Key: "docId", Value: []byte(payload.DocId)},
 			{Key: "ts", Value: []byte(payload.Timestamp)},
 		},
 		Timestamp: time.Now(),

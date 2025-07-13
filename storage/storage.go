@@ -9,13 +9,29 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/confluentinc/confluent-kafka-go/kafka"
 )
 
 type StorageManager interface {
 	ConsumeMutations() error
+	Stats() (*ManagerStats, error)
+}
+type ManagerStats struct {
+	StorageStat *StorageStats
+}
+type IndexStat struct {
+	Index     string
+	Slices    int
+	Documents string
+}
+type StorageStats struct {
+	Indexes   []IndexStat
+	TotalSize int64
 }
 type Storage interface {
 	Insert(payload share.MutatePayload) error
+	Stats() (*StorageStats, error)
 }
 
 type MemManager struct {
@@ -46,14 +62,53 @@ type MemStorage struct {
 	Segments map[string][]*IndexStore
 }
 
+func (m *MemManager) Stats() (*ManagerStats, error) {
+	storageStat, err := m.storage.Stats()
+	if err != nil {
+		return nil, err
+	}
+	return &ManagerStats{
+		StorageStat: storageStat,
+	}, nil
+}
+func (m *MemStorage) Stats() (*StorageStats, error) {
+
+	stats := &StorageStats{
+		Indexes:   []IndexStat{},
+		TotalSize: 0,
+	}
+
+	for index, segments := range m.Segments {
+		docIDSet := make(map[string]struct{})
+		docCount := 0
+
+		for _, segment := range segments {
+			for _, docIDs := range segment.Data {
+				for _, id := range docIDs {
+					docIDSet[id] = struct{}{}
+					docCount++
+				}
+			}
+		}
+
+		stats.Indexes = append(stats.Indexes, IndexStat{
+			Index:     index,
+			Slices:    len(segments),
+			Documents: fmt.Sprintf("%d", len(docIDSet)),
+		})
+
+		stats.TotalSize += int64(docCount)
+	}
+
+	return stats, nil
+}
+
 func (m *MemStorage) Insert(payload share.MutatePayload) error {
-	ts, err := time.Parse(time.RFC3339, payload.Timestamp)
+	fmt.Printf("Insert payload: %v\n", payload)
+	ts, err := time.Parse(time.RFC3339Nano, payload.Timestamp)
 	if err != nil {
 		return err
 	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	var segment *IndexStore
 	for _, seg := range m.Segments[payload.Index] {
@@ -99,39 +154,46 @@ func (m *MemStorage) createSegment(index string, ts time.Time) *IndexStore {
 
 func NewMemStorage(conf *conf.Config) *MemStorage {
 	return &MemStorage{
-		conf: conf,
-		mu:   sync.Mutex{},
+		conf:     conf,
+		mu:       sync.Mutex{},
+		Segments: make(map[string][]*IndexStore),
 	}
 }
 func (m *MemManager) ConsumeMutations() error {
-	fmt.Println("ConsumeMutations")
 	messages, err := m.eventHandler.ConsumeTopic(m.conf.Kafka.MutateTopic, "storage-consumer")
 	if err != nil {
 		return fmt.Errorf("failed to consume to %s: %s", m.conf.Kafka.MutateTopic, err.Error())
 	}
 	for message := range messages {
-		var op string
-		for _, header := range message.Headers {
-			if header.Key == "op" {
-				op = string(header.Value)
-			}
-			continue
+		h := headersMap(message.Headers)
+
+		op := share.MutateOp(h["op"])
+		ts := h["ts"]
+		docId := h["docId"]
+
+		payload := share.MutatePayload{
+			Value:     message.Value,
+			Index:     string(message.Key),
+			Op:        op,
+			Timestamp: ts,
+			DocId:     docId,
 		}
-		var payload share.MutatePayload
-		err := json.Unmarshal(message.Value, &payload)
-		if err != nil {
-			return err
-		}
-		switch share.MutateOp(op) {
+
+		switch op {
 		case share.SetOp:
-			err := m.storage.Insert(payload)
-			if err != nil {
+			if err := m.storage.Insert(payload); err != nil {
 				return err
 			}
 		default:
 			return errors.New("invalid operation")
 		}
-		fmt.Println("consumed-mutation", string(message.Key), message.Headers)
 	}
 	return nil
+}
+func headersMap(hdrs []kafka.Header) map[string]string {
+	m := make(map[string]string, len(hdrs))
+	for _, h := range hdrs {
+		m[h.Key] = string(h.Value)
+	}
+	return m
 }
