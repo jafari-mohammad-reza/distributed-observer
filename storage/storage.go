@@ -3,6 +3,7 @@ package storage
 import (
 	"distributed-observer/conf"
 	"distributed-observer/event"
+	"distributed-observer/server"
 	"distributed-observer/share"
 	"encoding/json"
 	"errors"
@@ -15,9 +16,8 @@ import (
 )
 
 type StorageManager interface {
-	ConsumeMutations() error
+	Start() error
 	Stats() (*ManagerStats, error)
-	GetStorage() Storage
 }
 type ManagerStats struct {
 	StorageStat *StorageStats
@@ -41,14 +41,17 @@ type MemManager struct {
 	conf         *conf.Config
 	storage      Storage
 	eventHandler event.EventHandler
+	tcpServer    server.Server
 }
 
 func NewStorageManager(conf *conf.Config, eventHandler event.EventHandler) StorageManager {
-	return &MemManager{
+	manager := MemManager{
 		conf:         conf,
 		storage:      NewMemStorage(conf),
 		eventHandler: eventHandler,
 	}
+	manager.tcpServer = server.NewServer(conf, eventHandler, manager.handleCommand)
+	return &manager
 }
 
 type IndexStore struct {
@@ -64,8 +67,7 @@ type MemStorage struct {
 	Segments map[string][]*IndexStore
 }
 
-func (m *MemManager) GetStorage() Storage {
-	return m.storage
+func (m *MemManager) handleCommand(packet *share.TransferPacket) {
 }
 func (m *MemManager) Stats() (*ManagerStats, error) {
 	storageStat, err := m.storage.Stats()
@@ -75,6 +77,24 @@ func (m *MemManager) Stats() (*ManagerStats, error) {
 	return &ManagerStats{
 		StorageStat: storageStat,
 	}, nil
+}
+
+func (m *MemManager) Start() error {
+	var startErr error
+	go func() {
+		if err := m.ConsumeMutations(); err != nil {
+			startErr = err
+		}
+	}()
+	go func() {
+		if err := m.tcpServer.Start(m.conf.Storage.Port); err != nil {
+			startErr = err
+		}
+	}()
+	if startErr != nil {
+		return startErr
+	}
+	return nil
 }
 func (m *MemStorage) Stats() (*StorageStats, error) {
 

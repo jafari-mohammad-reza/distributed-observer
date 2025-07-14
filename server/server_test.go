@@ -28,9 +28,9 @@ func TestServer(t *testing.T) {
 	handler := event.NewEventHandler(config)
 	err := handler.Connect()
 	assert.Nil(t, err, "Event handler should connect without error")
-	server := NewServer(config, handler, nil)
+	server := NewServer(config, handler, func(packet *share.TransferPacket) {})
 	go func() {
-		err := server.Start()
+		err := server.Start(config.Port)
 		assert.Nil(t, err, "Server should start without error")
 	}()
 	time.Sleep(time.Second)
@@ -61,7 +61,7 @@ func TestServer(t *testing.T) {
 	}
 	serializedPacket, err := share.SerializeTransferPacket(&setPacket)
 	assert.Nil(t, err, "Should serialize packet without error")
-	err = share.SendDataOverTcp(conn, int64(len(serializedPacket)), serializedPacket)
+	err = share.RequestConn(conn, int64(len(serializedPacket)), serializedPacket)
 	assert.Nil(t, err, "Should send data over TCP without error")
 	var size int64
 	err = binary.Read(conn, binary.BigEndian, &size)
