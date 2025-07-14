@@ -78,7 +78,7 @@ type SearchFilter struct {
 
 func ParseQuery(q string) ([]SearchFilter, error) {
 	parts := strings.Split(q, "AND")
-		fmt.Printf("parts: %v\n", parts)
+	fmt.Printf("parts: %v\n", parts)
 	var out []SearchFilter
 	for _, raw := range parts {
 		part := strings.TrimSpace(raw)
@@ -103,11 +103,15 @@ func ParseQuery(q string) ([]SearchFilter, error) {
 		f.Op = op
 
 		tokens := strings.SplitN(part, op, 2)
-		f.Field = strings.TrimSpace(tokens[0])
-		f.Value = strings.TrimSpace(tokens[1])
+		if op != "val" {
+			f.Field = strings.TrimSpace(tokens[0])
+			f.Value = strings.TrimSpace(tokens[1])
+		} else {
+			f.Field = ""
+			f.Value = strings.TrimSpace(tokens[0])
+		}
 
 		f.Value = strings.Trim(f.Value, `"'`)
-
 		out = append(out, f)
 	}
 	return out, nil

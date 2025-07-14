@@ -150,5 +150,28 @@ func TestStorage(t *testing.T) {
 	assert.Nil(t, err)
 	fmt.Printf("res: %v\n", res)
 	assert.Equal(t, len(res.DocumentIds), 1)
-	// TODO: test value search
+	searchQuery = share.SearchQuery{
+		Index:   "test",
+		TimeMin: creationTs,
+		TimeMax: time.Now().Add(time.Hour).Format(time.RFC3339Nano),
+		Query:   "test",
+	}
+
+	res, err = storage.Search(searchQuery)
+
+	assert.Nil(t, err)
+	assert.Equal(t, len(res.DocumentIds), 1)
+
+	searchQuery = share.SearchQuery{
+		Index:   "test",
+		TimeMin: creationTs,
+		TimeMax: time.Now().Add(time.Hour).Format(time.RFC3339Nano),
+		Query:   "test NOT test-family",
+	}
+
+	res, err = storage.Search(searchQuery)
+
+	assert.Nil(t, err)
+	fmt.Printf("res: %v\n", res)
+	assert.Equal(t, len(res.DocumentIds), 0)
 }
