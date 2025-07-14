@@ -17,6 +17,7 @@ import (
 type StorageManager interface {
 	ConsumeMutations() error
 	Stats() (*ManagerStats, error)
+	GetStorage() Storage
 }
 type ManagerStats struct {
 	StorageStat *StorageStats
@@ -63,6 +64,9 @@ type MemStorage struct {
 	Segments map[string][]*IndexStore
 }
 
+func (m *MemManager) GetStorage() Storage {
+	return m.storage
+}
 func (m *MemManager) Stats() (*ManagerStats, error) {
 	storageStat, err := m.storage.Stats()
 	if err != nil {

@@ -50,6 +50,7 @@ type MutateOp string
 
 const (
 	SetOp    MutateOp = "SET"
+	SearchOp MutateOp = "SEARCH"
 	DelOp    MutateOp = "DEL"
 	UpdateOp MutateOp = "UPDATE"
 )

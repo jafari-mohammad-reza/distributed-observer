@@ -28,7 +28,7 @@ func TestServer(t *testing.T) {
 	handler := event.NewEventHandler(config)
 	err := handler.Connect()
 	assert.Nil(t, err, "Event handler should connect without error")
-	server := NewServer(config, handler)
+	server := NewServer(config, handler, nil)
 	go func() {
 		err := server.Start()
 		assert.Nil(t, err, "Server should start without error")

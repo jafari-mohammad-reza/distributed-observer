@@ -5,6 +5,7 @@ import (
 	"distributed-observer/conf"
 	"distributed-observer/event"
 	"distributed-observer/share"
+	"distributed-observer/storage"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -17,13 +18,14 @@ type Server interface {
 	Start() error
 }
 
-func NewServer(config *conf.Config, eventHandler event.EventHandler) Server {
-	return &TCPServer{config: config, eventHandler: eventHandler}
+func NewServer(config *conf.Config, eventHandler event.EventHandler, storage storage.StorageManager) Server {
+	return &TCPServer{config: config, eventHandler: eventHandler, storage: storage.GetStorage()}
 }
 
 type TCPServer struct {
 	config       *conf.Config
 	eventHandler event.EventHandler
+	storage      storage.Storage
 }
 
 func (s *TCPServer) Start() error {
@@ -70,6 +72,7 @@ func (s *TCPServer) handleConn(conn net.Conn) error {
 func (s *TCPServer) handleCommand(packet *share.TransferPacket) {
 	conn := *packet.Conn
 	defer conn.Close()
+	fmt.Printf("command----%s", packet.Command)
 	switch packet.Command {
 	case share.SetCommand:
 		var payload share.MutatePayload
@@ -79,6 +82,21 @@ func (s *TCPServer) handleCommand(packet *share.TransferPacket) {
 		}
 		s.eventHandler.Mutate(payload)
 		s.respondConn(conn, []byte("set command applied"))
+	case share.SearchCommand:
+		var payload share.SearchQuery
+		err := json.Unmarshal(packet.Payload, &payload)
+		if err != nil {
+			s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("failed to unmarshal SEARCH command payload: %s", err.Error()))
+		}
+		search, err := s.storage.Search(payload)
+		if err != nil {
+			s.respondConn(conn, []byte(err.Error()))
+		}
+		res, err := json.Marshal(search)
+		if err != nil {
+			s.respondConn(conn, []byte(err.Error()))
+		}
+		s.respondConn(conn, res)
 	default:
 		s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("Unknown command: %s", packet.Command))
 		return
