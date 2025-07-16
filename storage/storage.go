@@ -68,6 +68,28 @@ type MemStorage struct {
 }
 
 func (m *MemManager) handleCommand(packet *share.TransferPacket) {
+	payload := packet.Payload
+	conn := *packet.Conn
+	switch packet.Command {
+	case share.SearchCommand:
+		var SearchQuery share.SearchQuery
+		err := json.Unmarshal(payload, &SearchQuery)
+		if err != nil {
+			fmt.Println("error parsing search query")
+			conn.Write([]byte(err.Error()))
+			return
+		}
+		result, err := m.storage.Search(SearchQuery)
+		if err != nil {
+			fmt.Println("failed searching for search query")
+			conn.Write([]byte(err.Error()))
+			return
+		}
+		fmt.Printf("result: %v\n", result)
+		fmt.Fprintf(conn, "found docs count:%d", len(result.DocumentIds))
+	default:
+		conn.Write([]byte("invalid command"))
+	}
 }
 func (m *MemManager) Stats() (*ManagerStats, error) {
 	storageStat, err := m.storage.Stats()

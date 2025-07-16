@@ -116,5 +116,5 @@ This format provides:
 
 
 ## TODOS:
-- [ ] Consume observer-logs and store in .log format
-- [ ] implement SET command and index sharding
+- [ ] write a client for tests
+- [ ] implement reverted index from document to value
