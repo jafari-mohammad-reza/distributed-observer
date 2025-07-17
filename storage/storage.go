@@ -19,6 +19,8 @@ import (
 
 type Storage interface {
 	Insert(payload share.MutatePayload) error
+	Update(payload share.MutatePayload) (int, error)
+	Delete(payload share.MutatePayload) (int, error)
 	Search(query share.SearchQuery) (*share.SearchResult, error) // search string that can be key : value , value or key ~: value
 	Stats() (*StorageStats, error)
 	Init() error
@@ -244,6 +246,40 @@ func (m *MemStorage) Insert(payload share.MutatePayload) error {
 
 	return nil
 }
+func (m *MemStorage) Delete(payload share.MutatePayload) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	segments := m.Segments[payload.Index]
+	deletedCount := 0
+
+	for _, seg := range segments {
+		for key, docs := range seg.Data {
+			fmt.Printf("key: %v\n", key)
+			filtered := docs[:0]
+			for _, docID := range docs {
+				fmt.Printf("docID: %v\n", docID)
+				if docID == payload.DocId {
+					deletedCount++
+				} else {
+					filtered = append(filtered, docID)
+				}
+			}
+			if len(filtered) == 0 {
+				delete(seg.Data, key)
+			} else {
+				seg.Data[key] = filtered
+			}
+			if len(seg.Data) == 0 {
+				delete(m.Segments, seg.Index)
+			}
+		}
+	}
+	return deletedCount / 2, nil // as we both save the value and key value
+}
+func (m *MemStorage) Update(payload share.MutatePayload) (int, error) {
+	return 0, nil
+}
 func (m *MemStorage) createSegment(index string, ts time.Time) *IndexStore {
 	seg := &IndexStore{
 		Index:   index,
@@ -284,6 +320,18 @@ func (m *MemManager) ConsumeMutations() error {
 			if err := m.storage.Insert(payload); err != nil {
 				return err
 			}
+		case share.DelOp:
+			count, err := m.storage.Delete(payload)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("del count: %v\n", count)
+		case share.UpdateOp:
+			count, err := m.storage.Update(payload)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("update count: %v\n", count)
 		default:
 			return errors.New("invalid operation")
 		}

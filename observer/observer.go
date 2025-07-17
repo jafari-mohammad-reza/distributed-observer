@@ -48,14 +48,14 @@ func (s *Observer) handleCommand(packet *share.TransferPacket) {
 	defer conn.Close()
 	fmt.Printf("command----%s", packet.Command)
 	switch packet.Command {
-	case share.SetCommand:
+	case share.SetCommand, share.UpdateCommand, share.DeleteCommand:
 		var payload share.MutatePayload
 		err := json.Unmarshal(packet.Payload, &payload)
 		if err != nil {
-			s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("failed to unmarshal SET command payload: %s", err.Error()))
+			s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("failed to unmarshal command payload: %s", err.Error()))
 		}
 		s.eventHandler.Mutate(payload)
-		share.RespondConn(conn, []byte("set command applied"))
+		share.RespondConn(conn, []byte("command applied"))
 	case share.SearchCommand:
 		serializedPacket, err := share.SerializeTransferPacket(packet)
 		if err != nil {
@@ -88,6 +88,7 @@ func (s *Observer) handleCommand(packet *share.TransferPacket) {
 			share.RespondConn(conn, []byte(err.Error()))
 			return
 		}
+
 	default:
 		s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("Unknown command: %s", packet.Command))
 		return

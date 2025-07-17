@@ -16,6 +16,7 @@ const (
 	SetCommand    Command = "SET"
 	SearchCommand Command = "SEARCH"
 	DeleteCommand Command = "DELETE"
+	UpdateCommand Command = "UPDATE"
 )
 
 type TransferPacket struct {

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"fmt"
 	"observer/conf"
 	"observer/share"
 	"path"
@@ -108,4 +109,18 @@ func TestStorage(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.Equal(t, len(res.DocumentIds), 0)
+	delPayload := share.MutatePayload{
+		Op:        share.DelOp,
+		Index:     "test",
+		Timestamp: time.Now().Format(time.RFC3339Nano),
+		DocId:     "test-doc",
+		Value:     nil,
+	}
+	count, err := storage.Delete(delPayload)
+	fmt.Printf("count: %v\n", count)
+	assert.Nil(t, err)
+	assert.Equal(t, count, 2) // as the document had two fields
+	stats, err = storage.Stats()
+	assert.Nil(t, err)
+	assert.Equal(t, len(stats.Indexes), 0)
 }
