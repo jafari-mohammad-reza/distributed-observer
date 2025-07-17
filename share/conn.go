@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"time"
 )
 
 func RequestConn(conn net.Conn, size int64, dataBytes []byte) error {
@@ -19,6 +20,24 @@ func RequestConn(conn net.Conn, size int64, dataBytes []byte) error {
 		return fmt.Errorf("failed to write data: %w", err)
 	}
 	return nil
+}
+
+func ReadConn(conn net.Conn, deadline time.Time) ([]byte, error) {
+	buff := new(bytes.Buffer)
+	var size int64
+	err := conn.SetReadDeadline(deadline)
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Read(conn, binary.BigEndian, &size)
+	if err != nil {
+		return nil, err
+	}
+	_, err = io.CopyN(buff, conn, size)
+	if err != nil {
+		return nil, err
+	}
+	return buff.Bytes(), nil
 }
 
 func RespondConn(conn net.Conn, msg []byte) error {

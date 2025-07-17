@@ -7,6 +7,7 @@ import (
 	"distributed-observer/share"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 type Observer struct {
@@ -46,21 +47,31 @@ func (s *Observer) handleCommand(packet *share.TransferPacket) {
 		s.eventHandler.Mutate(payload)
 		share.RespondConn(conn, []byte("set command applied"))
 	case share.SearchCommand:
-		var payload share.SearchQuery
-		err := json.Unmarshal(packet.Payload, &payload)
+		serializedPacket, err := share.SerializeTransferPacket(packet)
 		if err != nil {
-			s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("failed to unmarshal SEARCH command payload: %s", err.Error()))
+			fmt.Printf("err.Error(): %v\n", err.Error())
+			share.RespondConn(conn, []byte(err.Error()))
+			return
 		}
-		// TODO: send search query to storage port
-		// search, err := s.storage.Search(payload)
-		// if err != nil {
-		// 	s.respondConn(conn, []byte(err.Error()))
-		// }
-		// res, err := json.Marshal(search)
-		// if err != nil {
-		// 	s.respondConn(conn, []byte(err.Error()))
-		// }
-		// s.respondConn(conn, res)
+		err = share.RequestConn(conn, int64(len(serializedPacket)), serializedPacket)
+		if err != nil {
+			fmt.Printf("err.Error(): %v\n", err.Error())
+			share.RespondConn(conn, []byte(err.Error()))
+			return
+		}
+		resp, err := share.ReadConn(conn, time.Now().Add(time.Second*30))
+		if err != nil {
+			fmt.Printf("err.Error(): %v\n", err.Error())
+			share.RespondConn(conn, []byte(err.Error()))
+			return
+		}
+		fmt.Printf("resp: %s\n", string(resp))
+		err = share.RespondConn(conn, resp)
+		if err != nil {
+			fmt.Printf("err.Error(): %v\n", err.Error())
+			share.RespondConn(conn, []byte(err.Error()))
+			return
+		}
 	default:
 		s.eventHandler.Log(event.ErrorLog, fmt.Sprintf("Unknown command: %s", packet.Command))
 		return
