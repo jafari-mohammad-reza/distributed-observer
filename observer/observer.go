@@ -1,13 +1,13 @@
 package observer
 
 import (
-	"distributed-observer/conf"
-	"distributed-observer/event"
-	"distributed-observer/server"
-	"distributed-observer/share"
 	"encoding/json"
 	"fmt"
 	"net"
+	"observer/conf"
+	"observer/event"
+	"observer/server"
+	"observer/share"
 	"time"
 )
 

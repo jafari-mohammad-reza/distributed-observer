@@ -2,13 +2,13 @@ package server
 
 import (
 	"bytes"
-	"distributed-observer/conf"
-	"distributed-observer/event"
-	"distributed-observer/share"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
+	"observer/conf"
+	"observer/event"
+	"observer/share"
 	"time"
 )
 

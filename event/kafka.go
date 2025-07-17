@@ -2,10 +2,10 @@ package event
 
 import (
 	"context"
-	"distributed-observer/conf"
-	"distributed-observer/share"
 	"encoding/json"
 	"fmt"
+	"observer/conf"
+	"observer/share"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"

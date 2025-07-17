@@ -1,9 +1,9 @@
 package storage
 
 import (
-	"distributed-observer/conf"
-	"distributed-observer/share"
 	"encoding/json"
+	"observer/conf"
+	"observer/share"
 	"path"
 	"testing"
 	"time"

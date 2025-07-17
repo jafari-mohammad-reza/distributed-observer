@@ -1,13 +1,13 @@
 package server
 
 import (
-	"distributed-observer/conf"
-	"distributed-observer/event"
-	"distributed-observer/share"
 	"encoding/binary"
 	"encoding/json"
 	"io"
 	"net"
+	"observer/conf"
+	"observer/event"
+	"observer/share"
 	"testing"
 	"time"
 

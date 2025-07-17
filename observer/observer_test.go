@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"distributed-observer/conf"
-	"distributed-observer/event"
-	"distributed-observer/share"
+	"observer/conf"
+	"observer/event"
+	"observer/share"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )

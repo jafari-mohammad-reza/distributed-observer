@@ -2,12 +2,12 @@ package storage
 
 import (
 	"bufio"
-	"distributed-observer/conf"
-	"distributed-observer/share"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"observer/conf"
+	"observer/share"
 	"os"
 	"sort"
 	"sync"

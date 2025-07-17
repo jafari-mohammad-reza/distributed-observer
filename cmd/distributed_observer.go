@@ -1,11 +1,11 @@
 package main
 
 import (
-	"distributed-observer/conf"
-	"distributed-observer/event"
-	"distributed-observer/observer"
-	"distributed-observer/storage"
 	"fmt"
+	"observer/conf"
+	"observer/event"
+	"observer/observer"
+	"observer/storage"
 	"os"
 )
 
