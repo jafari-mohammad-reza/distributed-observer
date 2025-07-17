@@ -4,6 +4,7 @@ import (
 	"distributed-observer/conf"
 	"distributed-observer/share"
 	"encoding/json"
+	"path"
 	"testing"
 	"time"
 
@@ -11,7 +12,8 @@ import (
 )
 
 func TestStorage(t *testing.T) {
-
+	tmpDir := t.TempDir()
+	walPath := path.Join(tmpDir, "data.wal")
 	config := &conf.Config{
 		Port: 8081,
 		Kafka: conf.KafkaConf{
@@ -22,9 +24,13 @@ func TestStorage(t *testing.T) {
 			MutateChanSize: 100,
 			MutateTopic:    "test-mutates",
 		},
+		Storage: conf.StorageConf{
+			Port:    8082,
+			WalPath: walPath,
+		},
 	}
 	storage := NewMemStorage(config)
-
+	storage.Init()
 	message, err := json.Marshal(struct {
 		Name   string `json:"name"`
 		Family string `json:"family"`
@@ -42,6 +48,9 @@ func TestStorage(t *testing.T) {
 		Value:     message,
 	})
 	assert.Nil(t, err)
+	assert.Greater(t, len(storage.walCh), 0, "wal chan should have value")
+	time.Sleep(time.Second)
+	assert.Equal(t, len(storage.walCh), 0, "wal chan should be empty")
 	stats, err := storage.Stats()
 
 	assert.Nil(t, err)

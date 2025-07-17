@@ -1,121 +1,118 @@
 package storage
 
 import (
+	"bufio"
 	"distributed-observer/conf"
-	"distributed-observer/event"
-	"distributed-observer/server"
 	"distributed-observer/share"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/edsrzf/mmap-go"
 )
 
-type StorageManager interface {
-	Start() error
-	Stats() (*ManagerStats, error)
+type Storage interface {
+	Insert(payload share.MutatePayload) error
+	Search(query share.SearchQuery) (*share.SearchResult, error) // search string that can be key : value , value or key ~: value
+	Stats() (*StorageStats, error)
+	Init() error
 }
-type ManagerStats struct {
-	StorageStat *StorageStats
+type StorageStats struct {
+	Indexes   []IndexStat
+	TotalSize int64
 }
 type IndexStat struct {
 	Index     string
 	Slices    int
 	Documents string
 }
-type StorageStats struct {
-	Indexes   []IndexStat
-	TotalSize int64
-}
-type Storage interface {
-	Insert(payload share.MutatePayload) error
-	Search(query share.SearchQuery) (*share.SearchResult, error) // search string that can be key : value , value or key ~: value
-	Stats() (*StorageStats, error)
-}
-
-type MemManager struct {
-	conf         *conf.Config
-	storage      Storage
-	eventHandler event.EventHandler
-	tcpServer    server.Server
-}
-
-func NewStorageManager(conf *conf.Config, eventHandler event.EventHandler) StorageManager {
-	manager := MemManager{
-		conf:         conf,
-		storage:      NewMemStorage(conf),
-		eventHandler: eventHandler,
-	}
-	manager.tcpServer = server.NewServer(conf, eventHandler, manager.handleCommand)
-	return &manager
-}
-
 type IndexStore struct {
 	TimeMin time.Time
 	TimeMax time.Time
 	Index   string
 	Data    map[string][]string // value to document ids
 }
+type WalRecord struct {
+	Index     string
+	Timestamp int64
+	Key       string
+	DocID     string
+}
 
 type MemStorage struct {
 	mu       sync.Mutex
 	conf     *conf.Config
 	Segments map[string][]*IndexStore
+	walCh    chan WalRecord
 }
 
-func (m *MemManager) handleCommand(packet *share.TransferPacket) {
-	payload := packet.Payload
-	conn := *packet.Conn
-	switch packet.Command {
-	case share.SearchCommand:
-		var SearchQuery share.SearchQuery
-		err := json.Unmarshal(payload, &SearchQuery)
-		if err != nil {
-			fmt.Println("error parsing search query")
-			conn.Write([]byte(err.Error()))
-			return
-		}
-		result, err := m.storage.Search(SearchQuery)
-		if err != nil {
-			fmt.Println("failed searching for search query")
-			conn.Write([]byte(err.Error()))
-			return
-		}
-		fmt.Printf("result: %v\n", result)
-		fmt.Fprintf(conn, "found docs count:%d", len(result.DocumentIds))
-	default:
-		conn.Write([]byte("invalid command"))
+func NewMemStorage(conf *conf.Config) *MemStorage {
+	return &MemStorage{
+		conf:     conf,
+		mu:       sync.Mutex{},
+		Segments: make(map[string][]*IndexStore),
+		walCh:    make(chan WalRecord, 1_000_000),
 	}
 }
-func (m *MemManager) Stats() (*ManagerStats, error) {
-	storageStat, err := m.storage.Stats()
-	if err != nil {
-		return nil, err
+func (m *MemStorage) Init() error {
+	f, _ := os.OpenFile(m.conf.Storage.WalPath, os.O_RDONLY, 0)
+	data, _ := mmap.Map(f, mmap.RDONLY, 0)
+	defer data.Unmap()
+	offset := 0
+	for offset+4 <= len(data) {
+		size := int(binary.BigEndian.Uint32(data[offset : offset+4]))
+		offset += 4
+		recBytes := data[offset : offset+size]
+		offset += size
+		var rec WalRecord
+		json.Unmarshal(recBytes, &rec)
+		t := time.Unix(0, rec.Timestamp)
+		var seg *IndexStore
+		for _, s := range m.Segments[rec.Index] {
+			if !t.Before(s.TimeMin) && !t.After(s.TimeMax) {
+				seg = s
+				break
+			}
+		}
+		if seg == nil {
+			seg = m.createSegment(rec.Index, t)
+		}
+		if seg.Data == nil {
+			seg.Data = make(map[string][]string)
+		}
+		seg.Data[rec.Key] = append(seg.Data[rec.Key], rec.DocID)
+		if t.Before(seg.TimeMin) {
+			seg.TimeMin = t
+		}
+		if t.After(seg.TimeMax) {
+			seg.TimeMax = t
+		}
 	}
-	return &ManagerStats{
-		StorageStat: storageStat,
-	}, nil
-}
+	go func() {
+		f, _ := os.OpenFile(m.conf.Storage.WalPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		bufw := bufio.NewWriterSize(f, 1<<20)
+		defer f.Close()
+		for rec := range m.walCh {
+			b, err := json.Marshal(rec)
+			if err != nil {
+				fmt.Printf("writing val err: %v\n", err.Error()) // TODO: push this to event handler to try to rewrite the value DLQ
+				return
+			}
+			binary.Write(bufw, binary.BigEndian, uint32(len(b)))
+			bufw.Write(b)
+			bufw.Flush()
 
-func (m *MemManager) Start() error {
-	var startErr error
-	go func() {
-		if err := m.ConsumeMutations(); err != nil {
-			startErr = err
+			if bufw.Buffered() > 512<<10 {
+				bufw.Flush()
+			}
 		}
 	}()
-	go func() {
-		if err := m.tcpServer.Start(m.conf.Storage.Port); err != nil {
-			startErr = err
-		}
-	}()
-	if startErr != nil {
-		return startErr
-	}
 	return nil
 }
 func (m *MemStorage) Stats() (*StorageStats, error) {
@@ -207,7 +204,6 @@ func (m *MemStorage) Search(query share.SearchQuery) (*share.SearchResult, error
 }
 
 func (m *MemStorage) Insert(payload share.MutatePayload) error {
-	fmt.Printf("Insert payload: %v\n", payload)
 	ts, err := time.Parse(time.RFC3339Nano, payload.Timestamp)
 	if err != nil {
 		return err
@@ -236,6 +232,14 @@ func (m *MemStorage) Insert(payload share.MutatePayload) error {
 
 		composite := fmt.Sprintf("%s:%s", key, value)
 		segment.Data[composite] = append(segment.Data[composite], payload.DocId)
+
+		walRec := WalRecord{
+			Index:     payload.Index,
+			Timestamp: ts.UnixNano(),
+			DocID:     payload.DocId,
+			Key:       composite,
+		}
+		m.walCh <- walRec
 	}
 
 	return nil
@@ -255,13 +259,6 @@ func (m *MemStorage) createSegment(index string, ts time.Time) *IndexStore {
 	return seg
 }
 
-func NewMemStorage(conf *conf.Config) *MemStorage {
-	return &MemStorage{
-		conf:     conf,
-		mu:       sync.Mutex{},
-		Segments: make(map[string][]*IndexStore),
-	}
-}
 func (m *MemManager) ConsumeMutations() error {
 	messages, err := m.eventHandler.ConsumeTopic(m.conf.Kafka.MutateTopic, "storage-consumer")
 	if err != nil {
@@ -293,6 +290,7 @@ func (m *MemManager) ConsumeMutations() error {
 	}
 	return nil
 }
+
 func headersMap(hdrs []kafka.Header) map[string]string {
 	m := make(map[string]string, len(hdrs))
 	for _, h := range hdrs {

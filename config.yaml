@@ -11,3 +11,4 @@ kafka:
   mutate_chan_size: 1000
 storage:
   port: 8082
+  wal_path: data.wal

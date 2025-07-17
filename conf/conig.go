@@ -28,7 +28,8 @@ type KafkaConf struct {
 	MutateTopic     string   `mapstructure:"mutate_topic" `
 }
 type StorageConf struct {
-	Port int `mapstructure:"port"`
+	Port    int    `mapstructure:"port"`
+	WalPath string `mapstructure:"wal_path"`
 }
 
 func NewConfig() (*Config, error) {
