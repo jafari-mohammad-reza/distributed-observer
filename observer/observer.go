@@ -7,6 +7,7 @@ import (
 	"distributed-observer/share"
 	"encoding/json"
 	"fmt"
+	"net"
 	"time"
 )
 
@@ -25,10 +26,19 @@ func NewObserver(conf *conf.Config, eventHandler event.EventHandler) *Observer {
 }
 
 func (o *Observer) Start() error {
+	var start_err error
 	o.tcpServer = server.NewServer(o.conf, o.eventHandler, o.handleCommand)
-	err := o.tcpServer.Start(o.conf.Port)
-	if err != nil {
-		return err
+	go func() {
+		err := o.tcpServer.Start(o.conf.Port)
+		if err != nil {
+			start_err = err
+		}
+	}()
+	go func() {
+
+	}()
+	if start_err != nil {
+		return start_err
 	}
 	return nil
 }
@@ -53,13 +63,19 @@ func (s *Observer) handleCommand(packet *share.TransferPacket) {
 			share.RespondConn(conn, []byte(err.Error()))
 			return
 		}
-		err = share.RequestConn(conn, int64(len(serializedPacket)), serializedPacket)
+		storageConn, err := net.Dial("tcp", fmt.Sprintf(":%d", s.conf.Storage.Port))
 		if err != nil {
 			fmt.Printf("err.Error(): %v\n", err.Error())
 			share.RespondConn(conn, []byte(err.Error()))
 			return
 		}
-		resp, err := share.ReadConn(conn, time.Now().Add(time.Second*30))
+		err = share.RequestConn(storageConn, int64(len(serializedPacket)), serializedPacket)
+		if err != nil {
+			fmt.Printf("err.Error(): %v\n", err.Error())
+			share.RespondConn(conn, []byte(err.Error()))
+			return
+		}
+		resp, err := share.ReadConn(storageConn, time.Now().Add(time.Second*30))
 		if err != nil {
 			fmt.Printf("err.Error(): %v\n", err.Error())
 			share.RespondConn(conn, []byte(err.Error()))
