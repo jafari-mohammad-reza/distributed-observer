@@ -278,7 +278,16 @@ func (m *MemStorage) Delete(payload share.MutatePayload) (int, error) {
 	return deletedCount / 2, nil // as we both save the value and key value
 }
 func (m *MemStorage) Update(payload share.MutatePayload) (int, error) {
-	return 0, nil
+	deletedCount, err := m.Delete(payload)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := m.Insert(payload); err != nil {
+		return deletedCount, err
+	}
+
+	return deletedCount, nil
 }
 func (m *MemStorage) createSegment(index string, ts time.Time) *IndexStore {
 	seg := &IndexStore{

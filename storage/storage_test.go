@@ -76,6 +76,46 @@ func TestStorage(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.Equal(t, len(res.DocumentIds), 0)
+
+	updatedMsg, err := json.Marshal(struct {
+		Name   string `json:"name"`
+		Family string `json:"family"`
+	}{
+		Name:   "updated",
+		Family: "updated-family",
+	})
+	assert.NoError(t, err)
+	updateTs := time.Now().Add(time.Minute).Format(time.RFC3339Nano)
+	count, err := storage.Update(share.MutatePayload{
+		Op:        share.UpdateOp,
+		Index:     "test",
+		Timestamp: updateTs,
+		DocId:     "test-doc",
+		Value:     updatedMsg,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 2, count, "should delete old entries")
+
+	oldQuery := share.SearchQuery{
+		Index:   "test",
+		TimeMin: creationTs,
+		TimeMax: time.Now().Add(time.Hour).Format(time.RFC3339Nano),
+		Query:   "name == test",
+	}
+	res, err = storage.Search(oldQuery)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(res.DocumentIds), "old value should be gone")
+
+	newQuery := share.SearchQuery{
+		Index:   "test",
+		TimeMin: creationTs,
+		TimeMax: time.Now().Add(time.Hour).Format(time.RFC3339Nano),
+		Query:   "name == updated",
+	}
+	res, err = storage.Search(newQuery)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(res.DocumentIds), "new value should be present")
+
 	searchQuery = share.SearchQuery{
 		Index:   "test",
 		TimeMin: creationTs,
@@ -83,9 +123,9 @@ func TestStorage(t *testing.T) {
 		Query:   "name == test AND family == test-family",
 	}
 	res, err = storage.Search(searchQuery)
-
+	fmt.Printf("res: %v\n", res)
 	assert.Nil(t, err)
-	assert.Equal(t, len(res.DocumentIds), 1)
+	assert.Equal(t, len(res.DocumentIds), 0)
 	searchQuery = share.SearchQuery{
 		Index:   "test",
 		TimeMin: creationTs,
@@ -96,7 +136,7 @@ func TestStorage(t *testing.T) {
 	res, err = storage.Search(searchQuery)
 
 	assert.Nil(t, err)
-	assert.Equal(t, len(res.DocumentIds), 1)
+	assert.Equal(t, len(res.DocumentIds), 0)
 
 	searchQuery = share.SearchQuery{
 		Index:   "test",
@@ -116,7 +156,7 @@ func TestStorage(t *testing.T) {
 		DocId:     "test-doc",
 		Value:     nil,
 	}
-	count, err := storage.Delete(delPayload)
+	count, err = storage.Delete(delPayload)
 	fmt.Printf("count: %v\n", count)
 	assert.Nil(t, err)
 	assert.Equal(t, count, 2) // as the document had two fields
