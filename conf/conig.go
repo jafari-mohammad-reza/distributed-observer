@@ -16,7 +16,8 @@ func init() {
 type Config struct {
 	Port    int         `mapstructure:"port" validate:"required"`
 	Kafka   KafkaConf   `mapstructure:"kafka"`
-	Storage StorageConf `mapstructure:"storae"`
+	Storage StorageConf `mapstructure:"storage"`
+	Tracker TrackerConf `mapstructure:"tracker"`
 }
 type KafkaConf struct {
 	Brokers         string   `mapstructure:"brokers" validate:"required"`
@@ -30,6 +31,9 @@ type KafkaConf struct {
 type StorageConf struct {
 	Port    int    `mapstructure:"port"`
 	WalPath string `mapstructure:"wal_path"`
+}
+type TrackerConf struct {
+	Port int `mapstructure:"port"`
 }
 
 func NewConfig() (*Config, error) {

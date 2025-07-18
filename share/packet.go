@@ -13,10 +13,16 @@ import (
 type Command string
 
 const (
+	// storage commands
 	SetCommand    Command = "SET"
 	SearchCommand Command = "SEARCH"
 	DeleteCommand Command = "DELETE"
 	UpdateCommand Command = "UPDATE"
+	// tracker commands
+	StartSpanCommand        Command = "START_SPAN"
+	EndSpanCommand          Command = "END_SPAN"
+	StartTransactionCommand Command = "START_TRANSACTION"
+	EndTransactionCommand   Command = "END_TRANSACTION"
 )
 
 type TransferPacket struct {
@@ -120,4 +126,11 @@ func ParseQuery(q string) ([]SearchFilter, error) {
 
 type SearchResult struct {
 	DocumentIds []string `json:"document_ids"`
+}
+
+type StartTransactionPayload struct {
+	Name    string            `json:"name"`
+	Headers map[string]string `json:"headers"`
+}
+type StartSpanPayload struct {
 }
