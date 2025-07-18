@@ -130,8 +130,6 @@ func (t *Tracker) StartSpan(payload share.StartSpanPayload) (string, error) {
 	return span.ID, nil
 }
 func (t *Tracker) EndSpan(id string) error {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	sp, err := t.SearchSpan(id)
 	if err != nil {
 		return err
