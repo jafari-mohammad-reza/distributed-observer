@@ -181,11 +181,13 @@ func (t *Tracker) connectionHandler(packet *share.TransferPacket) {
 		var payload share.StartTransactionPayload
 		err := json.Unmarshal(packet.Payload, &payload)
 		if err != nil {
+			go t.eventHandler.Log(event.ErrorLog, err.Error())
 			share.RespondConn(*packet.Conn, []byte(err.Error()))
 			return
 		}
 		id, err := t.StartTransaction(payload)
 		if err != nil {
+			go t.eventHandler.Log(event.ErrorLog, err.Error())
 			share.RespondConn(*packet.Conn, []byte(err.Error()))
 			return
 		}
@@ -193,6 +195,7 @@ func (t *Tracker) connectionHandler(packet *share.TransferPacket) {
 	case share.EndTransactionCommand:
 		err := t.EndTransaction(string(packet.Payload))
 		if err != nil {
+			go t.eventHandler.Log(event.ErrorLog, err.Error())
 			share.RespondConn(*packet.Conn, []byte(err.Error()))
 			return
 		}
@@ -201,11 +204,13 @@ func (t *Tracker) connectionHandler(packet *share.TransferPacket) {
 		var payload share.StartSpanPayload
 		err := json.Unmarshal(packet.Payload, &payload)
 		if err != nil {
+			go t.eventHandler.Log(event.ErrorLog, err.Error())
 			share.RespondConn(*packet.Conn, []byte(err.Error()))
 			return
 		}
 		id, err := t.StartSpan(payload)
 		if err != nil {
+			go t.eventHandler.Log(event.ErrorLog, err.Error())
 			share.RespondConn(*packet.Conn, []byte(err.Error()))
 			return
 		}
@@ -213,6 +218,7 @@ func (t *Tracker) connectionHandler(packet *share.TransferPacket) {
 	case share.EndSpanCommand:
 		err := t.EndSpan(string(packet.Payload))
 		if err != nil {
+			go t.eventHandler.Log(event.ErrorLog, err.Error())
 			share.RespondConn(*packet.Conn, []byte(err.Error()))
 			return
 		}

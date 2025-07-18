@@ -6,6 +6,7 @@ kafka:
   bootstrap_topics:
     - observer-producer
     - observer-logs
+    - mutates
   mutate_topic: mutates
   log_chan_size: 1000
   mutate_chan_size: 1000

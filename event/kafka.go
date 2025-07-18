@@ -206,7 +206,7 @@ func (k *KafkaEventHandler) ConsumeTopic(topic, groupId string) (chan *kafka.Mes
 				messages <- e
 			case kafka.Error:
 				k.Log(ErrorLog, fmt.Sprintf(
-					"failed to consume topic:%s , error:%s", topic, e.Error()))
+					"failed to consume topic: %s , error: %s", topic, e.Error()))
 				return
 			default:
 				continue

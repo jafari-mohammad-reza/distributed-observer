@@ -6,6 +6,7 @@ import (
 	"observer/event"
 	"observer/observer"
 	"observer/storage"
+	"observer/tracker"
 	"os"
 )
 
@@ -23,6 +24,15 @@ func main() {
 	go func() {
 		if err := storageManager.Start(); err != nil {
 			err := eventHandler.Log(event.ErrorLog, fmt.Sprintf("error starting storage manager: %s", err.Error()))
+			if err != nil {
+				os.Exit(1)
+			}
+		}
+	}()
+	tr := tracker.NewTracker(conf, eventHandler)
+	go func() {
+		if err := tr.Start(); err != nil {
+			err := eventHandler.Log(event.ErrorLog, fmt.Sprintf("error starting tracker server: %s", err.Error()))
 			if err != nil {
 				os.Exit(1)
 			}
