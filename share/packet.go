@@ -132,5 +132,8 @@ type StartTransactionPayload struct {
 	Name    string            `json:"name"`
 	Headers map[string]string `json:"headers"`
 }
-type StartSpanPayload struct {
+type 	StartSpanPayload struct {
+	Name     string          `json:"name"`
+	Meta     json.RawMessage `json:"meta"`
+	ParentID string          `json:"parent_id"`
 }
