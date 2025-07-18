@@ -154,7 +154,6 @@ func (k *KafkaEventHandler) Log(level LogType, log string) error {
 		},
 		Timestamp: time.Now(),
 	}, k.logChan)
-	// k.producer.Flush(100)
 	if err != nil {
 		return fmt.Errorf("failed to produce message: %s", err)
 	}

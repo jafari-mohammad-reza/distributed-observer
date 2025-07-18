@@ -19,7 +19,8 @@ func main() {
 	if err := eventHandler.Connect(); err != nil {
 		panic(fmt.Sprintf("error connecting to event handler: %s", err.Error()))
 	}
-
+	logger := event.NewLogServer(conf, eventHandler)
+	logger.Start()
 	storageManager := storage.NewStorageManager(conf, eventHandler)
 	go func() {
 		if err := storageManager.Start(); err != nil {

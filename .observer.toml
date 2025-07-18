@@ -3,7 +3,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -o ./tmp/main ./cmd/observer.go"
+  cmd = "go build -o ./tmp/main ./cmd/distributed_observer.go"
   bin = "tmp/main"
   full_bin = "tmp/main"
   include_ext = ["go", "tpl", "tmpl", "html"]

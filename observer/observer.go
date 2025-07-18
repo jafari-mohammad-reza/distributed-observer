@@ -26,19 +26,10 @@ func NewObserver(conf *conf.Config, eventHandler event.EventHandler) *Observer {
 }
 
 func (o *Observer) Start() error {
-	var start_err error
 	o.tcpServer = server.NewServer(o.conf, o.eventHandler, o.handleCommand)
-	go func() {
-		err := o.tcpServer.Start(o.conf.Port)
-		if err != nil {
-			start_err = err
-		}
-	}()
-	go func() {
-
-	}()
-	if start_err != nil {
-		return start_err
+	err := o.tcpServer.Start(o.conf.Port)
+	if err != nil {
+		return err
 	}
 	return nil
 }

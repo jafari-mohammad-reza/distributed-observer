@@ -13,3 +13,5 @@ kafka:
 storage:
   port: 8082
   wal_path: data.wal
+tracker:
+  port: 8083
